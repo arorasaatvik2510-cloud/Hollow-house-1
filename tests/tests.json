@@ -1,0 +1,101 @@
+[
+  {
+    "name": "Start the story and inspect the photograph",
+    "sanity": true,
+    "viewport": "desktop",
+    "covers": [
+      "developer beta label",
+      "home hub navigation",
+      "visual codex UI/UX collage resource",
+      "logo resource display with asset upload",
+      "home screen",
+      "start story",
+      "chapter intro",
+      "object interaction",
+      "journal updates"
+    ],
+    "description": "Verifies the main journey from the title screen into the first scene and records an environmental clue.",
+    "steps": [
+      "Open the home screen",
+      "Select VISUAL CODEX",
+      "Verify the visual atlas screen and its collage upload fallback",
+      "Select BACK TO HUB",
+      "Select ENTER THE HOUSE",
+      "Select BEGIN EXPLORING",
+      "Select OLD PHOTOGRAPH",
+      "Open JOURNAL"
+    ],
+    "expected": "The home screen identifies the build as Developer Beta. After logo upload, the title artwork is visible. The entrance-hall scene opens, the photograph discovery is recorded, and the journal displays the observation."
+  },
+  {
+    "name": "Retain discoveries after reload",
+    "viewport": "desktop",
+    "covers": [
+      "local save persistence",
+      "inventory state",
+      "journal persistence"
+    ],
+    "description": "Verifies discovered objects and journal entries persist after reloading the browser.",
+    "steps": [
+      "Start the story and inspect the photograph",
+      "Collect the brass key",
+      "Reload the page",
+      "Continue the story",
+      "Open the journal"
+    ],
+    "expected": "The photograph and key remain collected and the journal retains their clue entries."
+  },
+  {
+    "name": "Use the correct memory layer to solve the bedroom",
+    "viewport": "desktop",
+    "covers": ["ordered chapter progression", "present-memory-reflection layer selection", "wrong-layer clue guardrail", "three-clue collection", "night puzzle answer validation", "chapter completion and unlock"],
+    "description": "Verifies that clues must be read through their assigned reality layer and that a correct layered investigation unlocks the next night.",
+    "steps": [
+      "Enter the house and inspect the old photograph and brass key",
+      "Open CHAPTERS and select The Silent Library",
+      "Set the catalogue words to MEMORY, HOUSE, NAME, RETURN and check the sequence",
+      "Return to CHAPTERS and open The Room That Remembers",
+      "In Present, inspect Back of the photograph",
+      "While still in Present, attempt to inspect Stopped clock and observe that the layer guardrail blocks it",
+      "Switch to Memory and inspect Stopped clock",
+      "Switch to Reflection and inspect Mirror inscription",
+      "Select 1961 and solve the mechanism",
+      "Open CHAPTERS and verify The Overgrown Garden is unlocked"
+    ],
+    "expected": "The house rejects the clue in the wrong layer, records each clue only in its matching layer, accepts 1961 after all three clues are found, and unlocks Night 03."
+  },
+  {
+    "name": "Complete entrance-hall discovery on mobile",
+    "viewport": "mobile",
+    "covers": [
+      "responsive mobile layout",
+      "touch object controls",
+      "journal on mobile"
+    ],
+    "description": "Verifies exploration controls remain available at a mobile viewport.",
+    "steps": [
+      "Open the story at a mobile viewport",
+      "Start the story and begin exploring",
+      "Tap the brass key hotspot",
+      "Tap the antique mirror hotspot",
+      "Open the journal"
+    ],
+    "expected": "Touch hotspots are visible and tappable and both discoveries are listed in the journal."
+  },
+  {
+    "name": "Cancel reset without deleting progress",
+    "viewport": "desktop",
+    "covers": [
+      "destructive action confirmation",
+      "save reset guardrail",
+      "settings"
+    ],
+    "description": "Verifies canceling the reset confirmation preserves story progress.",
+    "steps": [
+      "Open Settings",
+      "Choose RESET STORY PROGRESS",
+      "Cancel the browser confirmation"
+    ],
+    "expected": "The confirmation closes and saved story progress remains available."
+  }
+]
