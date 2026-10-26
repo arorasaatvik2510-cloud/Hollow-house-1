@@ -83,19 +83,28 @@
     "expected": "Touch hotspots are visible and tappable and both discoveries are listed in the journal."
   },
   {
-    "name": "Cancel reset without deleting progress",
+    "name": "Validate account sign-in and preserve progress on reset cancellation",
     "viewport": "desktop",
     "covers": [
+      "account sign-in form",
+      "required email validation",
+      "inline account error feedback",
       "destructive action confirmation",
       "save reset guardrail",
       "settings"
     ],
-    "description": "Verifies canceling the reset confirmation preserves story progress.",
+    "description": "Verifies account input validation is visible and canceling a destructive reset preserves existing story progress.",
+    "setup": [
+      "Start the story and inspect the photograph"
+    ],
     "steps": [
       "Open Settings",
+      "Verify the ACCOUNT & CLOUD SAVE panel and the email and password fields",
+      "Leave the email address blank and click SIGN IN",
+      "Verify the inline email validation message appears and no sign-in is completed",
       "Choose RESET STORY PROGRESS",
       "Cancel the browser confirmation"
     ],
-    "expected": "The confirmation closes and saved story progress remains available."
+    "expected": "The account form clearly rejects a blank email, does not start sign-in, and canceling the reset leaves the existing story progress unchanged."
   }
 ]

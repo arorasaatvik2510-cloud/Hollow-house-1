@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { createClient, type User } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
 import {
   ArrowDown,
@@ -6,6 +7,12 @@ import {
   ArrowRight,
   BookOpen,
   Check,
+  Cloud,
+  CloudOff,
+  LogIn,
+  LogOut,
+  UserRound,
+  RefreshCw,
   ChevronDown,
   DoorOpen,
   Eye,
@@ -83,6 +90,17 @@ const chapters = [
   },
 ];
 const storageKey = 'hollow-house-seven-nights-save-v1';
+const supabase = createClient(
+  'https://airnozaixgvzmuzhqdoh.supabase.co',
+  'sb_publishable_eGBpX2QUYunUCQ-9JJDm2Q_zfduHUKq',
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  }
+);
 const blankSave: SaveData = {
   unlockedThrough: 0,
   activeChapter: 0,
@@ -190,34 +208,40 @@ function getPreviewChapter(): number | null {
   const index = Number(value);
   return Number.isInteger(index) && index >= 0 && index < chapters.length ? index : null;
 }
-function loadSave(): SaveData {
+function normalizeSaveData(parsed: Partial<SaveData> | null | undefined): SaveData {
+  if (!parsed || typeof parsed !== 'object') return { ...blankSave };
+  return {
+    ...blankSave,
+    ...parsed,
+    unlockedThrough: Math.max(
+      0,
+      Math.min(7, Number(parsed.unlockedThrough) || 0)
+    ),
+    activeChapter: Math.max(
+      0,
+      Math.min(7, Number(parsed.activeChapter) || 0)
+    ),
+    journal: Array.isArray(parsed.journal)
+      ? parsed.journal.filter((x): x is string => typeof x === 'string')
+      : [],
+    completedChapters: Array.isArray(parsed.completedChapters)
+      ? parsed.completedChapters.filter((x): x is number => Number.isInteger(x) && x >= 0 && x <= 7)
+      : [],
+    cluesByChapter: parsed.cluesByChapter && typeof parsed.cluesByChapter === 'object'
+      ? parsed.cluesByChapter
+      : {},
+  };
+}
+function accountStorageKey(userId: string): string {
+  return storageKey + ':user:' + userId;
+}
+function loadSave(key = storageKey): SaveData {
   try {
-    const value = localStorage.getItem(storageKey);
-    if (!value) return blankSave;
-    const parsed = JSON.parse(value) as Partial<SaveData>;
-    return {
-      ...blankSave,
-      ...parsed,
-      unlockedThrough: Math.max(
-        0,
-        Math.min(7, Number(parsed.unlockedThrough) || 0)
-      ),
-      activeChapter: Math.max(
-        0,
-        Math.min(7, Number(parsed.activeChapter) || 0)
-      ),
-      journal: Array.isArray(parsed.journal)
-        ? parsed.journal.filter((x): x is string => typeof x === 'string')
-        : [],
-      completedChapters: Array.isArray(parsed.completedChapters)
-        ? parsed.completedChapters.filter((x): x is number => Number.isInteger(x) && x >= 0 && x <= 7)
-        : [],
-      cluesByChapter: parsed.cluesByChapter && typeof parsed.cluesByChapter === 'object'
-        ? parsed.cluesByChapter
-        : {},
-    };
+    const value = localStorage.getItem(key);
+    if (!value) return { ...blankSave };
+    return normalizeSaveData(JSON.parse(value) as Partial<SaveData>);
   } catch {
-    return blankSave;
+    return { ...blankSave };
   }
 }
 function HouseMark({ size = 34 }: { size?: number }) {
@@ -245,6 +269,15 @@ function HouseMark({ size = 34 }: { size?: number }) {
 }
 function App() {
   const previewChapter = getPreviewChapter();
+  const [accountUser, setAccountUser] = useState<User | null>(null);
+  const [accountReady, setAccountReady] = useState(false);
+  const [saveReady, setSaveReady] = useState(false);
+  const [accountEmail, setAccountEmail] = useState('');
+  const [accountPassword, setAccountPassword] = useState('');
+  const [accountMode, setAccountMode] = useState<'signin' | 'signup'>('signin');
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [accountNotice, setAccountNotice] = useState('');
+  const [cloudStatus, setCloudStatus] = useState<'guest' | 'loading' | 'saving' | 'saved' | 'error'>('guest');
   const [save, setSave] = useState<SaveData>(() => {
     const initial = loadSave();
     if (previewChapter === null) return initial;
@@ -295,16 +328,133 @@ function App() {
       </button>
     </div>
   );
+useEffect(() => {
+    let active = true;
+    const hydrateAccount = async (user: User | null) => {
+      setSaveReady(false);
+      setAccountReady(false);
+      setAccountUser(user);
+
+      if (!user) {
+        setSave(loadSave());
+        setCloudStatus('guest');
+        setAccountReady(true);
+        setSaveReady(true);
+        return;
+      }
+
+      setCloudStatus('loading');
+      try {
+        const { data: cloudRow, error } = await supabase
+          .from('hollow_house_saves')
+          .select('save_data, updated_at')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        const localKey = accountStorageKey(user.id);
+        const localRaw = localStorage.getItem(localKey);
+        const localUpdatedAt = Number(localStorage.getItem(localKey + ':updated') || '0');
+        const cloudUpdatedAt = cloudRow?.updated_at ? Date.parse(cloudRow.updated_at) : 0;
+        let nextSave: SaveData;
+
+        if (cloudRow?.save_data && localRaw && localUpdatedAt > cloudUpdatedAt) {
+          nextSave = loadSave(localKey);
+        } else if (cloudRow?.save_data) {
+          nextSave = normalizeSaveData(cloudRow.save_data as Partial<SaveData>);
+        } else if (localRaw) {
+          nextSave = loadSave(localKey);
+        } else {
+          const guestClaimed = localStorage.getItem(storageKey + ':guest-claimed-v1') === 'true';
+          const guestRaw = localStorage.getItem(storageKey);
+          if (guestRaw && !guestClaimed) {
+            nextSave = loadSave(storageKey);
+            localStorage.setItem(storageKey + ':guest-claimed-v1', 'true');
+            localStorage.removeItem(storageKey);
+          } else {
+            nextSave = { ...blankSave };
+          }
+        }
+
+        if (!active) return;
+        setSave(nextSave);
+        setCloudStatus(cloudRow?.save_data ? 'saved' : 'saving');
+        setAccountNotice('');
+      } catch (error) {
+        if (!active) return;
+        setSave(loadSave(accountStorageKey(user.id)));
+        setCloudStatus('error');
+        setAccountNotice(
+          'Signed in, but cloud progress could not be loaded. Your local account copy is preserved.'
+        );
+      } finally {
+        if (active) {
+          setAccountReady(true);
+          setSaveReady(true);
+        }
+      }
+    };
+
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      if (error) setAccountNotice('Could not verify the account session. Please sign in again.');
+      void hydrateAccount(data.session?.user ?? null);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event !== 'SIGNED_IN' && event !== 'SIGNED_OUT' && event !== 'USER_UPDATED') return;
+      window.setTimeout(() => {
+        if (active) void hydrateAccount(session?.user ?? null);
+      }, 0);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
   useEffect(() => {
-    if (previewChapter !== null) return;
+    if (!saveReady || previewChapter !== null) return;
+    const key = accountUser ? accountStorageKey(accountUser.id) : storageKey;
     try {
-      localStorage.setItem(storageKey, JSON.stringify(save));
+      localStorage.setItem(key, JSON.stringify(save));
+      localStorage.setItem(key + ':updated', String(Date.now()));
     } catch {
-      setNotice(
-        'Progress could not be saved. Check this browser’s storage settings.'
-      );
+      setNotice('Progress could not be saved. Check this browser’s storage settings.');
     }
-  }, [save, previewChapter]);
+  }, [save, previewChapter, accountUser?.id, saveReady]);
+
+  useEffect(() => {
+    if (!saveReady || !accountUser || previewChapter !== null) return;
+    let active = true;
+    const userId = accountUser.id;
+    const timer = window.setTimeout(async () => {
+      setCloudStatus('saving');
+      const { error } = await supabase
+        .from('hollow_house_saves')
+        .upsert(
+          {
+            user_id: userId,
+            save_data: save,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        );
+      if (!active) return;
+      if (error) {
+        setCloudStatus('error');
+        setAccountNotice('Cloud sync failed. Your local copy remains available. Open Account and choose SYNC NOW to retry.');
+      } else {
+        setCloudStatus('saved');
+      }
+    }, 700);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [save, accountUser?.id, saveReady, previewChapter]);
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(''), 3200);
@@ -442,6 +592,111 @@ function App() {
     setScreen('home');
     setNotice('Local story progress has been reset.');
   };
+  const handleAccountSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const email = accountEmail.trim();
+
+    if (!email) {
+      setAccountNotice('Enter your email address before continuing.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setAccountNotice('Enter a valid email address.');
+      return;
+    }
+    if (!accountPassword) {
+      setAccountNotice('Enter your password before continuing.');
+      return;
+    }
+    if (accountMode === 'signup' && accountPassword.length < 8) {
+      setAccountNotice('Choose a password with at least 8 characters.');
+      return;
+    }
+
+    setAccountBusy(true);
+    setAccountNotice('');
+    try {
+      if (accountMode === 'signup') {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password: accountPassword,
+          options: { emailRedirectTo: window.location.origin },
+        });
+        if (error) throw error;
+        setAccountPassword('');
+        if (data.session) {
+          setAccountNotice('Account created. Loading your private cloud save.');
+        } else {
+          setAccountMode('signin');
+          setAccountNotice('Check your email to confirm the account, then sign in here.');
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password: accountPassword,
+        });
+        if (error) throw error;
+        setAccountPassword('');
+        setAccountNotice('Signed in. Loading this account’s separate progress.');
+      }
+    } catch (error) {
+      setAccountNotice(error instanceof Error ? error.message : 'Account request failed. Please try again.');
+    } finally {
+      setAccountBusy(false);
+    }
+  };
+
+  const syncCloudSave = async () => {
+    if (!accountUser) return;
+    setAccountBusy(true);
+    setAccountNotice('');
+    const { error } = await supabase
+      .from('hollow_house_saves')
+      .upsert(
+        {
+          user_id: accountUser.id,
+          save_data: save,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      );
+    if (error) {
+      setCloudStatus('error');
+      setAccountNotice('Cloud sync failed. The local account copy remains on this device. Check your connection and retry.');
+    } else {
+      setCloudStatus('saved');
+      setAccountNotice('Cloud save synchronized for ' + (accountUser.email || 'this account') + '.');
+    }
+    setAccountBusy(false);
+  };
+
+  const handleAccountSignOut = async () => {
+    if (!accountUser) return;
+    setAccountBusy(true);
+    setAccountNotice('');
+    const { error: saveError } = await supabase
+      .from('hollow_house_saves')
+      .upsert(
+        {
+          user_id: accountUser.id,
+          save_data: save,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      );
+    const { error: signOutError } = await supabase.auth.signOut();
+    setAccountBusy(false);
+    if (signOutError) {
+      setAccountNotice('Sign-out failed. Please try again.');
+    } else if (saveError) {
+      setCloudStatus('guest');
+      setAccountNotice('Signed out. The last cloud sync failed, but this account’s local recovery copy was kept on this device.');
+    } else {
+      setCloudStatus('guest');
+      setAccountNotice('Signed out. Each account keeps its own separate progress.');
+    }
+  };
+
   const chapter = chapters[save.activeChapter] || chapters[0];
   return (
     <main
@@ -469,6 +724,15 @@ function App() {
         <div className="top-actions">
           <span className="status-dot" />
           <span className="status-copy beta-pill">DEVELOPER BETA · BUILD 0.1.0</span>
+          <button
+            className="account-button"
+            onClick={() => setScreen('settings')}
+            aria-label="Account and cloud saves"
+            title="Account and cloud saves"
+          >
+            {accountUser ? <Cloud size={14} /> : <LogIn size={14} />}
+            <span>{!accountReady ? 'CHECKING' : accountUser ? 'ACCOUNT' : 'SIGN IN'}</span>
+          </button>
           <button
             className="icon-button"
             onClick={() => setScreen('settings')}
@@ -1147,6 +1411,68 @@ function App() {
             <br />
             <em>at home.</em>
           </h2>
+          <div className="account-card">
+            <div className="account-card-heading">
+              {accountUser ? <Cloud size={19} /> : <UserRound size={19} />}
+              <div className="account-card-title">
+                <strong>ACCOUNT &amp; CLOUD SAVE</strong>
+                <small>{accountUser ? 'Signed in as ' + (accountUser.email || 'account holder') : 'Play as a guest or sign in to sync across devices'}</small>
+              </div>
+              <span className={'account-status-pill ' + cloudStatus}>
+                {cloudStatus === 'saved' ? 'CLOUD SYNCED' : cloudStatus === 'saving' ? 'SYNCING' : cloudStatus === 'loading' ? 'LOADING' : cloudStatus === 'error' ? 'SYNC ISSUE' : 'GUEST SAVE'}
+              </span>
+            </div>
+            {accountUser ? (
+              <div className="account-signed-in">
+                <p>Your progress is tied to this account, not to the browser profile. Sign in to the same account on another device to continue.</p>
+                <div className="account-actions">
+                  <button type="button" className="secondary-button" onClick={() => void syncCloudSave()} disabled={accountBusy}>
+                    <RefreshCw size={14} /> SYNC NOW
+                  </button>
+                  <button type="button" className="quiet-button" onClick={() => void handleAccountSignOut()} disabled={accountBusy}>
+                    <LogOut size={14} /> SIGN OUT
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form className="account-form" onSubmit={handleAccountSubmit}>
+                <label htmlFor="hollow-account-email">EMAIL ADDRESS</label>
+                <input
+                  id="hollow-account-email"
+                  type="email"
+                  autoComplete="email"
+                  value={accountEmail}
+                  onChange={event => setAccountEmail(event.target.value)}
+                  placeholder="you@example.com"
+                />
+                <label htmlFor="hollow-account-password">PASSWORD</label>
+                <input
+                  id="hollow-account-password"
+                  type="password"
+                  autoComplete={accountMode === 'signup' ? 'new-password' : 'current-password'}
+                  value={accountPassword}
+                  onChange={event => setAccountPassword(event.target.value)}
+                  placeholder={accountMode === 'signup' ? 'At least 8 characters' : 'Your password'}
+                />
+                <button className="primary-button account-submit" type="submit" disabled={accountBusy}>
+                  <span>{accountBusy ? 'PLEASE WAIT…' : accountMode === 'signup' ? 'CREATE ACCOUNT' : 'SIGN IN'}</span>
+                  <ArrowRight size={15} />
+                </button>
+                <button
+                  className="account-mode-toggle"
+                  type="button"
+                  onClick={() => {
+                    setAccountMode(mode => mode === 'signin' ? 'signup' : 'signin');
+                    setAccountNotice('');
+                  }}
+                >
+                  {accountMode === 'signup' ? 'Already have an account? Sign in' : 'New here? Create an account'}
+                </button>
+                <p className="account-footnote">Guest progress stays on this device. Your first account can adopt the existing guest save; other accounts get their own independent progress.</p>
+              </form>
+            )}
+            {accountNotice && <p className="account-message" role="status" aria-live="polite">{accountNotice}</p>}
+          </div>
           <div className="settings-list">
             <button onClick={() => setLargeText(value => !value)}>
               <span>
@@ -1166,10 +1492,11 @@ function App() {
           <div className="save-card">
             <Save size={18} />
             <div>
-              <strong>Local save data</strong>
+              <strong>{accountUser ? 'Local recovery copy' : 'Guest save data'}</strong>
               <p>
-                Progress is stored in this browser on this device. Clearing site
-                data can remove it. Cloud saves are not enabled.
+                {accountUser
+                  ? 'A local recovery copy is kept on this device alongside this account’s cloud save.'
+                  : 'Guest progress is stored in this browser on this device. Sign in above to enable a separate cloud save for each account.'}
               </p>
             </div>
           </div>
