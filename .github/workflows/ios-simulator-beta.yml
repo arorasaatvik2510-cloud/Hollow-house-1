@@ -22,7 +22,7 @@ jobs:
           npx cap sync ios
       - name: Build unsigned iOS Simulator app
         run: |
-          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO -derivedDataPath build
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO -derivedDataPath build
       - uses: actions/upload-artifact@v4
         with:
           name: hollow-house-ios-simulator-app
