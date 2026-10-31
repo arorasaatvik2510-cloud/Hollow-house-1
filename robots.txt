@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://the-hollow-house-seven-nights-m6nqi0.v2.appdeploy.ai/sitemap.xml
