@@ -90,6 +90,100 @@ const chapters = [
   },
 ];
 const storageKey = 'hollow-house-seven-nights-save-v1';
+
+const HOUSE_VAULT_KEY = 'hollow-house-seven-nights-encrypted-vault-v1';
+const HOUSE_VAULT_PERSON = 'The Archivist';
+const HOUSE_VAULT_ITERATIONS = 600000;
+type HouseVaultEnvelope = {
+  format: 'hollow-house-encrypted-vault';
+  version: 1;
+  kdf: 'PBKDF2-SHA-256';
+  iterations: number;
+  salt: string;
+  iv: string;
+  ciphertext: string;
+};
+function houseVaultToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let index = 0; index < bytes.length; index += 1) binary += String.fromCharCode(bytes[index]);
+  return window.btoa(binary);
+}
+function houseVaultFromBase64(value: string): Uint8Array {
+  const binary = window.atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+function houseVaultAad(envelope: Pick<HouseVaultEnvelope, 'format' | 'version' | 'kdf' | 'iterations' | 'salt'>): Uint8Array {
+  return new TextEncoder().encode(JSON.stringify({
+    format: envelope.format, version: envelope.version, kdf: envelope.kdf,
+    iterations: envelope.iterations, salt: envelope.salt,
+  }));
+}
+function parseHouseVaultEnvelope(value: unknown): HouseVaultEnvelope {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('This is not a Hollow House encrypted vault backup.');
+  const envelope = value as Partial<HouseVaultEnvelope>;
+  if (envelope.format !== 'hollow-house-encrypted-vault' || envelope.version !== 1 ||
+      envelope.kdf !== 'PBKDF2-SHA-256' || !Number.isInteger(envelope.iterations) ||
+      (envelope.iterations as number) < 100000 || (envelope.iterations as number) > 1000000 ||
+      typeof envelope.salt !== 'string' || typeof envelope.iv !== 'string' || typeof envelope.ciphertext !== 'string') {
+    throw new Error('The encrypted vault format is unsupported or incomplete.');
+  }
+  const salt = houseVaultFromBase64(envelope.salt);
+  const iv = houseVaultFromBase64(envelope.iv);
+  const ciphertext = houseVaultFromBase64(envelope.ciphertext);
+  if (salt.length < 16 || iv.length !== 12 || ciphertext.length < 16) throw new Error('The encrypted vault file is incomplete.');
+  return envelope as HouseVaultEnvelope;
+}
+async function deriveHouseVaultKey(passphrase: string, salt: Uint8Array, iterations = HOUSE_VAULT_ITERATIONS): Promise<CryptoKey> {
+  if (!window.crypto?.subtle) throw new Error('This browser does not support the required encryption. Use an up-to-date browser over HTTPS.');
+  const material = await window.crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  return window.crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+    material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+  );
+}
+async function encryptHouseVaultSnapshot(saveData: SaveData, passphrase: string): Promise<HouseVaultEnvelope> {
+  const saltBytes = window.crypto.getRandomValues(new Uint8Array(16));
+  const salt = houseVaultToBase64(saltBytes);
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  const metadata = {
+    format: 'hollow-house-encrypted-vault' as const,
+    version: 1 as const,
+    kdf: 'PBKDF2-SHA-256' as const,
+    iterations: HOUSE_VAULT_ITERATIONS,
+    salt,
+    iv: houseVaultToBase64(iv),
+  };
+  const key = await deriveHouseVaultKey(passphrase, saltBytes);
+  const ciphertext = await window.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: houseVaultAad(metadata) },
+    key, new TextEncoder().encode(JSON.stringify({ format: 'hollow-house-save', version: 1, saveData }))
+  );
+  return { ...metadata, ciphertext: houseVaultToBase64(new Uint8Array(ciphertext)) };
+}
+async function decryptHouseVaultSnapshot(value: unknown, passphrase: string): Promise<{ envelope: HouseVaultEnvelope; saveData: SaveData }> {
+  const envelope = parseHouseVaultEnvelope(value);
+  const key = await deriveHouseVaultKey(passphrase, houseVaultFromBase64(envelope.salt), envelope.iterations);
+  let payload: any;
+  try {
+    const plain = await window.crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: houseVaultFromBase64(envelope.iv), additionalData: houseVaultAad(envelope) },
+      key, houseVaultFromBase64(envelope.ciphertext)
+    );
+    payload = JSON.parse(new TextDecoder().decode(plain));
+  } catch {
+    throw new Error('Incorrect passphrase, or encrypted vault authentication failed.');
+  }
+  if (!payload || payload.format !== 'hollow-house-save' || payload.version !== 1 ||
+      !payload.saveData || typeof payload.saveData !== 'object' ||
+      !Array.isArray(payload.saveData.journal) || !Array.isArray(payload.saveData.completedChapters) ||
+      !payload.saveData.cluesByChapter || typeof payload.saveData.cluesByChapter !== 'object') {
+    throw new Error('The decrypted file is not a valid Hollow House save.');
+  }
+  return { envelope, saveData: normalizeSaveData(payload.saveData) };
+}
+
 const supabase = createClient(
   'https://airnozaixgvzmuzhqdoh.supabase.co',
   'sb_publishable_eGBpX2QUYunUCQ-9JJDm2Q_zfduHUKq',
@@ -299,6 +393,7 @@ function App() {
   const [lightOn, setLightOn] = useState(false);
   const [houseLayer, setHouseLayer] = useState<HouseLayer>('present');
   const [logoLoaded, setLogoLoaded] = useState(false);
+  const [subLogoLoaded, setSubLogoLoaded] = useState(false);
   const [atlasImageLoaded, setAtlasImageLoaded] = useState(false);
   const [atlasImageUnavailable, setAtlasImageUnavailable] = useState(false);
   const [doorInspected, setDoorInspected] = useState(false);
@@ -308,6 +403,17 @@ function App() {
   const [reducedMotion, setReducedMotion] = useState(false);
   const [shelf, setShelf] = useState(['HOUSE', 'RETURN', 'MEMORY', 'NAME']);
   const [puzzleChoice, setPuzzleChoice] = useState('');
+
+  const [vaultExists, setVaultExists] = useState(() => {
+    try { return Boolean(localStorage.getItem(HOUSE_VAULT_KEY)); } catch { return false; }
+  });
+  const [vaultUnlocked, setVaultUnlocked] = useState(false);
+  const [vaultIdentity, setVaultIdentity] = useState('');
+  const [vaultPassphrase, setVaultPassphrase] = useState('');
+  const [vaultConfirm, setVaultConfirm] = useState('');
+  const [vaultNotice, setVaultNotice] = useState('');
+  const [vaultBusy, setVaultBusy] = useState(false);
+
   const currentPuzzle = nightPuzzles[save.activeChapter];
   const currentClues = save.cluesByChapter[String(save.activeChapter)] || [];
   const currentPuzzleSolved = save.completedChapters.includes(save.activeChapter);
@@ -315,6 +421,96 @@ function App() {
   const platformLabel = Capacitor.isNativePlatform()
     ? 'CAPACITOR · ' + Capacitor.getPlatform().toUpperCase()
     : 'WEB PREVIEW · CAPACITOR CONFIGURED';
+
+  async function createHouseVault() {
+    setVaultNotice('');
+    if (vaultPassphrase.length < 12) { setVaultNotice('Use at least 12 characters for the vault passphrase.'); return; }
+    if (vaultPassphrase !== vaultConfirm) { setVaultNotice('The passphrases do not match.'); return; }
+    setVaultBusy(true);
+    try {
+      const envelope = await encryptHouseVaultSnapshot(save, vaultPassphrase);
+      localStorage.setItem(HOUSE_VAULT_KEY, JSON.stringify(envelope));
+      setVaultExists(true);
+      setVaultUnlocked(true);
+      setVaultConfirm('');
+      setVaultNotice('Encrypted snapshot vault created. Your passphrase is not stored.');
+    } catch (error) {
+      setVaultNotice(error instanceof Error ? error.message : 'Could not create the encrypted vault.');
+    } finally { setVaultBusy(false); }
+  }
+  async function unlockHouseVault() {
+    setVaultNotice('');
+    if (vaultIdentity.trim().toLowerCase() !== HOUSE_VAULT_PERSON.toLowerCase()) {
+      setVaultNotice('Access denied. The assigned keeper identity is The Archivist.');
+      return;
+    }
+    setVaultBusy(true);
+    try {
+      const raw = localStorage.getItem(HOUSE_VAULT_KEY);
+      if (!raw) throw new Error('No encrypted vault exists on this device.');
+      await decryptHouseVaultSnapshot(JSON.parse(raw), vaultPassphrase);
+      setVaultUnlocked(true);
+      setVaultNotice('Access granted to The Archivist for this session.');
+    } catch (error) {
+      setVaultNotice(error instanceof Error ? error.message : 'Could not unlock the vault.');
+    } finally { setVaultBusy(false); }
+  }
+  async function sealHouseVault() {
+    setVaultNotice('');
+    if (!vaultUnlocked || !vaultPassphrase) { setVaultNotice('Unlock the vault first.'); return; }
+    setVaultBusy(true);
+    try {
+      const envelope = await encryptHouseVaultSnapshot(save, vaultPassphrase);
+      localStorage.setItem(HOUSE_VAULT_KEY, JSON.stringify(envelope));
+      setVaultNotice('Current story progress sealed into an encrypted snapshot.');
+    } catch (error) {
+      setVaultNotice(error instanceof Error ? error.message : 'Could not seal the current progress.');
+    } finally { setVaultBusy(false); }
+  }
+  function exportHouseVault() {
+    try {
+      if (!vaultUnlocked) throw new Error('Unlock the vault before exporting a backup.');
+      const raw = localStorage.getItem(HOUSE_VAULT_KEY);
+      if (!raw) throw new Error('Create and seal the vault before exporting.');
+      const envelope = parseHouseVaultEnvelope(JSON.parse(raw));
+      const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url; anchor.download = 'hollow-house-encrypted-vault.json';
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setVaultNotice('Encrypted backup downloaded. It still requires the passphrase.');
+    } catch (error) {
+      setVaultNotice(error instanceof Error ? error.message : 'Could not export the encrypted backup.');
+    }
+  }
+  async function importHouseVault(event: { target: HTMLInputElement }) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setVaultNotice('');
+    try {
+      if (!vaultUnlocked || !vaultPassphrase) throw new Error('Unlock the vault before restoring a backup.');
+      const imported = await decryptHouseVaultSnapshot(JSON.parse(await file.text()), vaultPassphrase);
+      if (!window.confirm('Restore this encrypted Hollow House backup? Current story progress will be replaced.')) return;
+      const restored = normalizeSaveData(imported.saveData);
+      const key = accountUser ? accountStorageKey(accountUser.id) : storageKey;
+      localStorage.setItem(key, JSON.stringify(restored));
+      localStorage.setItem(key + ':updated', String(Date.now()));
+      setSave(restored);
+      localStorage.setItem(HOUSE_VAULT_KEY, JSON.stringify(imported.envelope));
+      setVaultNotice('Encrypted backup restored. Story progress has been updated.');
+    } catch (error) {
+      setVaultNotice(error instanceof Error ? error.message : 'Could not restore the encrypted backup.');
+    } finally { event.target.value = ''; }
+  }
+  function lockHouseVault() {
+    setVaultUnlocked(false);
+    setVaultPassphrase('');
+    setVaultConfirm('');
+    setVaultIdentity('');
+    setVaultNotice('Vault locked. Re-enter the keeper identity and passphrase to unlock it.');
+  }
+
   const layerSwitcher = (
     <div className="memory-layer-switch" role="group" aria-label="Select a house-memory layer">
       <button type="button" className={'memory-tab present-tab' + (houseLayer === 'present' ? ' active' : '')} aria-pressed={houseLayer === 'present'} onClick={() => setHouseLayer('present')}>
@@ -714,7 +910,21 @@ useEffect(() => {
           aria-label="Return to main menu"
         >
           <span className="brand-mini">
-            <HouseMark />
+            <img
+              className="brand-mini-art"
+              src="/resources/hollow-house-sub-logo.png"
+              alt=""
+              onLoad={() => setSubLogoLoaded(true)}
+              onError={event => {
+                setSubLogoLoaded(false);
+                event.currentTarget.style.display = 'none';
+              }}
+            />
+            {!subLogoLoaded && (
+              <span className="brand-mini-fallback" aria-hidden="true">
+                <HouseMark />
+              </span>
+            )}
           </span>
           <span>
             <strong>THE HOLLOW HOUSE</strong>
@@ -1413,7 +1623,7 @@ useEffect(() => {
           </h2>
           <div className="account-card">
             <div className="account-card-heading">
-              {accountUser ? <Cloud size={19} /> : <UserRound size={19} />}
+              {cloudStatus === 'error' ? <CloudOff size={19} /> : accountUser ? <Cloud size={19} /> : <UserRound size={19} />}
               <div className="account-card-title">
                 <strong>ACCOUNT &amp; CLOUD SAVE</strong>
                 <small>{accountUser ? 'Signed in as ' + (accountUser.email || 'account holder') : 'Play as a guest or sign in to sync across devices'}</small>
@@ -1489,6 +1699,50 @@ useEffect(() => {
               <span className={'toggle' + (reducedMotion ? ' on' : '')} />
             </button>
           </div>
+
+          <div className="account-card">
+            <div className="account-card-heading">
+              <Shield size={19} />
+              <div className="account-card-title">
+                <strong>SECURITY VAULT</strong>
+                <small>Assigned keeper: The Archivist · AES-GCM 256-bit encrypted backup snapshots</small>
+              </div>
+              <span className={'account-status-pill ' + (vaultUnlocked ? 'saved' : 'guest')}>{vaultUnlocked ? 'UNLOCKED' : vaultExists ? 'LOCKED' : 'NOT SET UP'}</span>
+            </div>
+            {!vaultExists ? (
+              <form className="account-form" onSubmit={event => { event.preventDefault(); void createHouseVault(); }}>
+                <p className="account-footnote">Create a private passphrase to protect a separate save snapshot. The live game save remains local/cloud-synced according to the existing settings; this vault encrypts only its backup copy.</p>
+                <label htmlFor="house-vault-passphrase">CREATE PASSPHRASE</label>
+                <input id="house-vault-passphrase" type="password" minLength={12} maxLength={256} autoComplete="new-password" value={vaultPassphrase} onChange={event => setVaultPassphrase(event.target.value)} placeholder="At least 12 characters" required />
+                <label htmlFor="house-vault-confirm">CONFIRM PASSPHRASE</label>
+                <input id="house-vault-confirm" type="password" minLength={12} maxLength={256} autoComplete="new-password" value={vaultConfirm} onChange={event => setVaultConfirm(event.target.value)} required />
+                <button className="primary-button account-submit" type="submit" disabled={vaultBusy}>{vaultBusy ? 'SECURING…' : 'CREATE ENCRYPTED VAULT'}</button>
+              </form>
+            ) : !vaultUnlocked ? (
+              <form className="account-form" onSubmit={event => { event.preventDefault(); void unlockHouseVault(); }}>
+                <label htmlFor="house-vault-identity">SECRET KEEPER IDENTITY</label>
+                <input id="house-vault-identity" type="text" autoComplete="username" value={vaultIdentity} onChange={event => setVaultIdentity(event.target.value)} placeholder="Keeper identity" required />
+                <label htmlFor="house-vault-unlock-passphrase">VAULT PASSPHRASE</label>
+                <input id="house-vault-unlock-passphrase" type="password" autoComplete="current-password" value={vaultPassphrase} onChange={event => setVaultPassphrase(event.target.value)} required />
+                <button className="primary-button account-submit" type="submit" disabled={vaultBusy}>{vaultBusy ? 'CHECKING…' : 'UNLOCK VAULT'}</button>
+              </form>
+            ) : (
+              <div className="account-signed-in">
+                <p>Access granted to The Archivist for this session. The vault snapshot is separate from the normal save.</p>
+                <div className="account-actions">
+                  <button type="button" className="secondary-button" onClick={() => void sealHouseVault()} disabled={vaultBusy}><Save size={14} /> SEAL CURRENT PROGRESS</button>
+                  <button type="button" className="secondary-button" onClick={exportHouseVault}><ArrowDown size={14} /> DOWNLOAD ENCRYPTED BACKUP</button>
+                </div>
+                <label className="account-mode-toggle">RESTORE ENCRYPTED BACKUP
+                  <input type="file" accept="application/json,.json" onChange={importHouseVault} />
+                </label>
+                <button type="button" className="quiet-button" onClick={lockHouseVault}>LOCK VAULT</button>
+              </div>
+            )}
+            {vaultNotice && <p className="account-message" role="status" aria-live="polite">{vaultNotice}</p>}
+            <p className="account-footnote">Keep the passphrase safe. It is not stored or recoverable. CSV/other external exports, if any, are not encrypted by this vault.</p>
+          </div>
+
           <div className="save-card">
             <Save size={18} />
             <div>
