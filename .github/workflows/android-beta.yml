@@ -1,20 +1,9 @@
-name: Android Developer Beta and Store Candidates
+name: Android Developer Beta APK
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "src/**"
-      - "index.html"
-      - "package.json"
-      - "capacitor.config.ts"
-      - "vite.config.ts"
-      - ".github/workflows/android-beta.yml"
 jobs:
-  build-android-candidates:
+  build-debug-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,30 +12,23 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
-      - uses: android-actions/setup-android@v4
-        with:
-          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
       - name: Install dependencies
         run: npm install
       - name: Build the web game
         run: npm run build
       - name: Generate and sync native Android project
         run: |
-          rm -rf android
           npx cap add android
           npx cap sync android
-      - name: Build debug APK, release APK, and AAB candidates
+      - name: Build debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug assembleRelease bundleRelease
+          ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: hollow-house-android-candidates-unsigned
-          path: |
-            android/app/build/outputs/apk/debug/*.apk
-            android/app/build/outputs/apk/release/*.apk
-            android/app/build/outputs/bundle/release/*.aab
+          name: hollow-house-android-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 14
