@@ -2674,3 +2674,24 @@ h2 {
     display: none;
   }
 }
+
+
+/* Premium visual refresh — noir, antique gold and deep wine */
+:root{color-scheme:dark;--bg:#09090c;--panel:#141217;--panel2:#1e1820;--line:#4a3541;--gold:#d9b66e;--pale:#f1e5d4;--wine:#542436;--teal:#d9b66e}
+html,body{background:radial-gradient(ellipse at 82% 4%,#57223538,transparent 38%),radial-gradient(ellipse at 12% 28%,#b18a4617,transparent 32%),#09090c;color:#eee5dc}
+button,a,input,select,textarea{accent-color:var(--gold)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline-color:var(--gold)}
+.primary-button,.primary,.button-primary{background:linear-gradient(135deg,#f0d89c,#bd914c)!important;border-color:#e1c17e!important;color:#1a1217!important;box-shadow:0 7px 22px #d9b66e20}
+.secondary-button,.quiet-button{border-color:#6a4652;color:#e7cfaa}
+.panel,.card,.chapter-card,.memory-lens-panel,.night-puzzle-panel,.journal-paper,.account-card,.save-card{border-color:#4a3541;background:linear-gradient(145deg,#211920,#121015 76%);box-shadow:0 14px 34px #0005,inset 0 1px #ffffff08}
+.section-kicker,.eyebrow,.chapter-number,.chapter-meta{color:#c5a66f}
+h1,h2,h3{text-shadow:0 1px 16px #0005}em,.gold-text,.chapter-title em{color:#e0bf7b}
+.site-footer{border-color:#49343e;color:#b6a4a9}
+.night-scene-visual{background:radial-gradient(ellipse at 50% 32%,#71404a55,transparent 38%),linear-gradient(145deg,#25131d,#0b0a0e 65%,#2b1b20);border-color:#715044;box-shadow:inset 0 0 80px #0009,0 18px 44px #0007}
+.scene-moon{background:#d7b875;box-shadow:0 0 48px #d7b87555}.scene-light{background:radial-gradient(ellipse,#d9b66e35,transparent 65%)}
+.scene-markings{opacity:.72;filter:sepia(.65) saturate(.8)}
+.night-clue,.night-answer,.inventory-item,.completion-card,.account-status-pill{border-color:#62414c;background:linear-gradient(135deg,#251a22,#141116)}
+.night-clue.found,.night-answer.selected{border-color:#d9b66e;box-shadow:inset 0 0 0 1px #d9b66e33,0 0 22px #d9b66e12}
+.journal-paper{background:linear-gradient(145deg,#1e1820,#121015)}.journal-paper-head,.journal-entry{border-color:#49343e}
+.toast{background:linear-gradient(135deg,#f0d99d,#bd914c);color:#1b1217}
+@media(max-width:700px){.night-scene-visual{box-shadow:inset 0 0 55px #0009}}
