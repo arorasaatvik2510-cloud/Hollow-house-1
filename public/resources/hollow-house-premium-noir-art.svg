@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" fill="none">
+<defs><linearGradient id="night" x1="150" y1="0" x2="1000" y2="900" gradientUnits="userSpaceOnUse"><stop stop-color="#211016"/><stop offset=".55" stop-color="#09090c"/><stop offset="1" stop-color="#24131b"/></linearGradient><linearGradient id="brass" x1="250" y1="100" x2="950" y2="800"><stop stop-color="#f2dfb3"/><stop offset=".48" stop-color="#b68a48"/><stop offset="1" stop-color="#f2d69b"/></linearGradient><radialGradient id="mist"><stop stop-color="#713c4b" stop-opacity=".6"/><stop offset="1" stop-color="#713c4b" stop-opacity="0"/></radialGradient></defs>
+<rect width="1200" height="900" rx="24" fill="url(#night)"/><ellipse cx="760" cy="370" rx="390" ry="330" fill="url(#mist)"/><circle cx="760" cy="220" r="125" stroke="url(#brass)" stroke-opacity=".72" stroke-width="2"/><circle cx="760" cy="220" r="106" stroke="#ead7b4" stroke-opacity=".18"/>
+<path d="M170 760V350L600 110L1030 350V760" stroke="url(#brass)" stroke-width="5"/><path d="M260 760V395L600 205L940 395V760" stroke="url(#brass)" stroke-opacity=".55" stroke-width="3"/>
+<path d="M390 760V500Q600 250 810 500V760" stroke="url(#brass)" stroke-width="4"/><path d="M475 760V540Q600 385 725 540V760" stroke="#e7d1a4" stroke-opacity=".72" stroke-width="2"/>
+<path d="M600 760V580M580 580H620M600 580V510" stroke="url(#brass)" stroke-width="3"/><path d="M110 760H1090M80 800H1120" stroke="url(#brass)" stroke-opacity=".4"/>
+<g stroke="#d8bb83" stroke-opacity=".4"><path d="M95 110H310M95 110V190M1105 110H890M1105 110V190"/></g>
+<text x="95" y="155" fill="#e9d4aa" font-family="Georgia,serif" font-size="26" letter-spacing="9">THE HOLLOW HOUSE</text><text x="98" y="192" fill="#bd9860" font-family="monospace" font-size="12" letter-spacing="5">SEVEN NIGHTS · A STUDY IN SHADOW</text>
+<text x="95" y="850" fill="#d8c39e" font-family="monospace" font-size="12" letter-spacing="5">THE HOUSE REMEMBERS</text></svg>
