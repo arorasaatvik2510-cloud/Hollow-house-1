@@ -7,7 +7,8 @@
       "developer beta label",
       "home hub navigation",
       "visual codex UI/UX collage resource",
-      "logo resource display with asset upload",
+      "main logo display with asset upload",
+      "sub-logo in persistent top navigation",
       "home screen",
       "start story",
       "chapter intro",
@@ -18,14 +19,15 @@
     "steps": [
       "Open the home screen",
       "Select VISUAL CODEX",
-      "Verify the visual atlas screen and its collage upload fallback",
+      "Verify the sub-logo is visible in the persistent top navigation",
+      "Select VISUAL CODEX and verify the collage or its upload fallback",
       "Select BACK TO HUB",
       "Select ENTER THE HOUSE",
       "Select BEGIN EXPLORING",
       "Select OLD PHOTOGRAPH",
       "Open JOURNAL"
     ],
-    "expected": "The home screen identifies the build as Developer Beta. After logo upload, the title artwork is visible. The entrance-hall scene opens, the photograph discovery is recorded, and the journal displays the observation."
+    "expected": "The home screen identifies the build as Developer Beta. The sub-logo appears in the persistent top navigation; after the main logo upload, title artwork is visible; the Visual Codex displays the collage or its upload fallback. The entrance-hall scene opens, the photograph discovery is recorded, and the journal displays the observation."
   },
   {
     "name": "Retain discoveries after reload",
@@ -33,7 +35,12 @@
     "covers": [
       "local save persistence",
       "inventory state",
-      "journal persistence"
+      "journal persistence",
+      "security vault setup",
+      "The Archivist identity gate",
+      "encrypted backup creation and export",
+      "encrypted backup restoration",
+      "passphrase not stored"
     ],
     "description": "Verifies discovered objects and journal entries persist after reloading the browser.",
     "steps": [
@@ -41,14 +48,25 @@
       "Collect the brass key",
       "Reload the page",
       "Continue the story",
-      "Open the journal"
+      "Open the journal",
+      "Open Settings and create a Security Vault passphrase with at least 12 characters.",
+      "Seal the current story progress and download the encrypted backup.",
+      "Lock the vault and attempt to unlock with an incorrect keeper identity.",
+      "Unlock using The Archivist and the correct passphrase, then import the downloaded backup and confirm restoration."
     ],
-    "expected": "The photograph and key remain collected and the journal retains their clue entries."
+    "expected": "The photograph and key remain collected and the journal retains their clue entries. The Security Vault also protects a separate encrypted snapshot, rejects the wrong keeper identity or passphrase, and restores only after confirmation."
   },
   {
     "name": "Use the correct memory layer to solve the bedroom",
     "viewport": "desktop",
-    "covers": ["ordered chapter progression", "present-memory-reflection layer selection", "wrong-layer clue guardrail", "three-clue collection", "night puzzle answer validation", "chapter completion and unlock"],
+    "covers": [
+      "ordered chapter progression",
+      "present-memory-reflection layer selection",
+      "wrong-layer clue guardrail",
+      "three-clue collection",
+      "night puzzle answer validation",
+      "chapter completion and unlock"
+    ],
     "description": "Verifies that clues must be read through their assigned reality layer and that a correct layered investigation unlocks the next night.",
     "steps": [
       "Enter the house and inspect the old photograph and brass key",
