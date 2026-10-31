@@ -2695,3 +2695,14 @@ h1,h2,h3{text-shadow:0 1px 16px #0005}em,.gold-text,.chapter-title em{color:#e0b
 .journal-paper{background:linear-gradient(145deg,#1e1820,#121015)}.journal-paper-head,.journal-entry{border-color:#49343e}
 .toast{background:linear-gradient(135deg,#f0d99d,#bd914c);color:#1b1217}
 @media(max-width:700px){.night-scene-visual{box-shadow:inset 0 0 55px #0009}}
+
+/* Premium noir art direction */
+:root{--bg:#09090b;--panel:#171316;--line:#49343b;--muted:#b5a5a0;--gold:#dfbd78;--pale:#f0e5d2;--ice:#c99ba7;--teal:#a87986;--violet:#c6a5b1;}
+.app-shell{background:radial-gradient(ellipse at 76% 38%,#351b25 0%,#171014 46%,#070709 100%)}
+.topbar{border-bottom-color:#49343b}
+.hero-art{background-image:linear-gradient(180deg,#08070920,#08070968),url('/resources/hollow-house-premium-noir-art.svg');background-size:cover;background-position:center;border-color:#b88e5140}
+.hero-art:after{content:'';position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(90deg,#09090b38,transparent 55%),linear-gradient(0deg,#09090b55,transparent 48%)}
+.account-button,.icon-button{border-color:#65434c;color:#e0c17e;background:#140f12}
+.primary-button{background:linear-gradient(135deg,#f0d99f,#b98b43);border-color:#dfbd78;color:#17110a}
+.primary-button:hover{background:#e4c889;border-color:#e4c889}
+button:focus-visible{outline-color:#dfbd78}
